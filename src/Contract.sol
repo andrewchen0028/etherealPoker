@@ -9,23 +9,40 @@ contract Poker {
     uint256 constant maxBuyIn = 100 * bigBlind;
 
     uint256 dealerIndex; // Increments each ROUND.
-    uint256 playerIndex; // Increments each TURN.
+    uint256 activeIndex; // Increments each TURN.
 
     uint256 bet; // May update each TURN.
     uint256 pot; // May update each TURN.
 
+    bool inRound; // Flips each ROUND.
+
     // EVENTS
 
     // MODIFIERS
+    modifier onlyActive() {
+        require(msg.sender == players[activeIndex], "Please wait your turn");
+        _;
+    }
     modifier onlyPlayer() {
-        require(msg.sender == players[playerIndex], "Please wait your turn");
+        bool playerExists = false;
+        for (uint256 i = 0; i < players.length; i++) {
+            if (players[i] == msg.sender) {
+                playerExists = true;
+            }
+        }
+        require(playerExists, "You have not joined this game");
+        _;
+    }
+    modifier betweenRounds() {
+        require(inRound == false);
         _;
     }
 
     // STRUCTS, ARRAYS, ENUMS
     address payable[] players; // May change each GAME.
     Card[52] private deck; // Shuffled each GAME.
-    mapping(address => uint256) public balances; //  May update each TURN.
+    mapping(address => bool) public ready; // Changes BETWEEN ROUNDS.
+    mapping(address => uint256) public stacks; //  May update each TURN.
     mapping(address => Card[2]) private holes; //Changes each GAME.
 
     enum Suit {
@@ -59,25 +76,58 @@ contract Poker {
     // FALLBACK & RECEIVE FUNCTION
 
     // EXTERNAL FUNCTIONS
-    function buyIn() external payable {
-        require(minBuyIn <= msg.value);
-        require(msg.value <= maxBuyIn);
+    function buyIn() external payable betweenRounds {
+        require(
+            smallBlind <= msg.value && msg.value <= bigBlind,
+            "Buy-in must be within limits"
+        );
+        require(
+            stacks[msg.sender] == 0,
+            "Buy-in reserved for entering; use top-off to add funds"
+        );
+        players.push(payable(msg.sender));
+        stacks[msg.sender] = msg.value;
     }
 
-    function voteStart() external {}
+    function readyUp() external betweenRounds onlyPlayer {
+        ready[msg.sender] = true;
+    }
 
-    function call() external onlyPlayer {}
+    function cashOut() external betweenRounds onlyPlayer {}
 
-    function check() external onlyPlayer {}
+    function call() external onlyActive {}
 
-    function raise() external onlyPlayer {}
+    function check() external onlyActive {}
 
-    function fold() external onlyPlayer {}
+    function raise() external onlyActive {}
+
+    function fold() external onlyActive {}
 
     // PUBLIC FUNCTIONS
     // INTERNAL FUNCTIONS
-    // PRIVATE FUNCTIONS
-    function postSmallBlind() private onlyPlayer {}
 
-    function postBigBlind() private onlyPlayer {}
+    // PRIVATE FUNCTIONS
+    function allPlayersReady() private view returns (bool) {
+        for (uint256 i = 0; i < players.length; i++) {
+            if (!ready[players[i]]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function postSmallBlind() private {}
+
+    function postBigBlind() private {}
+
+    function wager(uint256 amount, address player) private {
+        require(stacks[player] >= amount, "Insufficient funds");
+        stacks[player] -= amount;
+        pot += amount;
+    }
+
+    function win(address player) private {
+        stacks[player] += pot;
+        pot = 0;
+    }
 }
