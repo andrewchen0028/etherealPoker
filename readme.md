@@ -1,0 +1,2 @@
+### Ethereal Poker
+Poker in Solidity, built using Forge toolchain. Not intended for actual use; decks and hands are publicly visible on block explorers due to the lack of data obfuscation tools for Ethereum.
